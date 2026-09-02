@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TrainingGPT MVP backend — single-table DynamoDB + single Lambda behind a
+  Function URL. No API Gateway. On-demand DynamoDB billing. Designed for $0
+  monthly cost at low/personal traffic volumes.
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 10
+    MemorySize: 128
+    Architectures:
+      - arm64
+
+Resources:
+  TrainingLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TrainingLogs
+      BillingMode: PAY_PER_REQUEST # on-demand capacity -> $0 when idle
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  TrainingLogsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: training-logs-handler
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TrainingLogsTable
+      # Least-privilege: only the two operations the handler actually uses,
+      # scoped to this single table (no wildcard resources/actions).
+      Policies:
+        - Statement:
+            - Sid: TrainingLogsReadWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt TrainingLogsTable.Arn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - '*'
+          AllowMethods:
+            - GET
+            - POST
+          AllowHeaders:
+            - content-type
+          MaxAge: 300
+
+Outputs:
+  FunctionUrl:
+    Description: Public HTTPS endpoint for the training log API (no API Gateway).
+    Value: !GetAtt TrainingLogsFunctionUrl.FunctionUrl
+  TableName:
+    Description: DynamoDB table name.
+    Value: !Ref TrainingLogsTable
+  TableArn:
+    Description: DynamoDB table ARN.
+    Value: !GetAtt TrainingLogsTable.Arn
