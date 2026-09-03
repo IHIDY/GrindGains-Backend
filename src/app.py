@@ -20,7 +20,9 @@ invoking this function, so no CORS headers are added here.
 import datetime
 import decimal
 import json
+import logging
 import os
+import re
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -33,6 +35,10 @@ _dynamodb = boto3.resource("dynamodb")
 _table = _dynamodb.Table(TABLE_NAME)
 
 VALID_MODES = ("isotonic", "mobeta")
+MOVEMENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def lambda_handler(event, context):
@@ -50,8 +56,11 @@ def lambda_handler(event, context):
         return _response(405, {"error": f"Unsupported method: {method}"})
     except ValueError as exc:
         return _response(400, {"error": str(exc)})
-    except Exception as exc:  # noqa: BLE001 - MVP: surface a generic 500
-        return _response(500, {"error": "Internal error", "detail": str(exc)})
+    except Exception:  # noqa: BLE001 - MVP: surface a generic 500
+        # Full detail goes to CloudWatch only; callers never see internal
+        # exception text (could otherwise leak boto3/DynamoDB internals).
+        logger.exception("Unhandled error processing request")
+        return _response(500, {"error": "Internal error"})
 
 
 def _handle_post(event, user_id):
@@ -78,8 +87,13 @@ def _handle_post(event, user_id):
     ]
     if missing:
         raise ValueError(f"Missing required field(s): {', '.join(missing)}")
+
+    movement_id = _validate_movement_id(movement_id)
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {VALID_MODES}, got {mode!r}")
+    weight = _validate_number("weight", weight)
+    reps_or_time = _validate_number("reps_or_time", reps_or_time)
+    sets = _validate_number("sets", sets)
 
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -103,6 +117,7 @@ def _handle_get(event, user_id):
     movement_id = params.get("movement_id")
     if not movement_id:
         raise ValueError("movement_id query parameter is required")
+    movement_id = _validate_movement_id(movement_id)
 
     sk_prefix = f"MOVEMENT#{movement_id}#LOG#"
     result = _table.query(
@@ -110,6 +125,21 @@ def _handle_get(event, user_id):
         & Key("SK").begins_with(sk_prefix)
     )
     return _response(200, result.get("Items", []))
+
+
+def _validate_movement_id(movement_id):
+    if not isinstance(movement_id, str) or not MOVEMENT_ID_RE.match(movement_id):
+        raise ValueError(
+            "movement_id must be 1-128 characters: letters, digits, "
+            "underscore, or hyphen"
+        )
+    return movement_id
+
+
+def _validate_number(name, value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be a number, got {type(value).__name__}")
+    return value
 
 
 def _to_decimal(value):

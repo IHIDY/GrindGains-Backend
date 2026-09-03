@@ -29,6 +29,41 @@ Resources:
           RequireNumbers: true
           RequireSymbols: false
           RequireUppercase: true
+      LambdaConfig:
+        PreSignUp: !GetAtt InviteCodeValidatorFunction.Arn
+
+  InviteCodeValidatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: training-invite-code-validator
+      CodeUri: src/
+      Handler: invite_trigger.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TrainingLogsTable
+      # Separate least-privilege role from the main API function: this one
+      # only ever consumes invite codes, never touches training log items.
+      Policies:
+        - Statement:
+            - Sid: InviteCodeConsume
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt TrainingLogsTable.Arn
+
+  InviteCodeValidatorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${InviteCodeValidatorFunction}
+      RetentionInDays: 14
+
+  InviteCodeValidatorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref InviteCodeValidatorFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -95,6 +130,12 @@ Resources:
             - content-type
             - authorization
           MaxAge: 300
+
+  TrainingLogsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TrainingLogsFunction}
+      RetentionInDays: 14 # avoid unbounded log storage growth (would otherwise never expire)
 
 Outputs:
   FunctionUrl:

@@ -1,18 +1,26 @@
 # TrainingGPT — MVP Backend
 
-Multi-user backend for a personal training tracker (sets/reps + isometric
-time-under-tension), built as a single Lambda behind a Function URL. No API
-Gateway — that means no built-in Cognito authorizer either, so the Lambda
-verifies the caller's Cognito ID token itself.
+Invite-only, multi-user backend for a personal training tracker (sets/reps +
+isometric time-under-tension), built on a Lambda behind a Function URL. No
+API Gateway — that means no built-in Cognito authorizer either, so the
+Lambda verifies the caller's Cognito ID token itself.
 
 ## Stack
 
 - **IaC:** AWS SAM (`template.yaml`)
-- **Compute:** 1 Lambda function (Python 3.11, arm64), routed by HTTP method
-- **Storage:** 1 DynamoDB table (`TrainingLogs`), on-demand billing
-- **Auth:** Amazon Cognito User Pool (free tier: 50,000 MAU) — the frontend
-  signs users in and sends their ID token; the Lambda verifies it on every
-  request (see `src/auth.py`)
+- **Compute:** 2 Lambda functions (Python 3.11, arm64):
+  - `TrainingLogsFunction` — the API, routed by HTTP method behind the
+    Function URL (`src/app.py`)
+  - `InviteCodeValidatorFunction` — a Cognito Pre Sign-up trigger that gates
+    registration behind a one-time invite code (`src/invite_trigger.py`).
+    Kept as a separate function on purpose: it can't share the API
+    function's env vars without CloudFormation rejecting the template as a
+    circular dependency (User Pool → trigger function → User Pool)
+- **Storage:** 1 DynamoDB table (`TrainingLogs`), on-demand billing — also
+  holds invite code items (`PK=INVITECODE#<code>`)
+- **Auth:** Amazon Cognito User Pool (free tier: 50,000 MAU), registration
+  gated by invite code — the frontend signs users in and sends their ID
+  token; the Lambda verifies it on every request (see `src/auth.py`)
 - **API:** Lambda Function URL with CORS enabled (`AuthType: NONE` — auth is
   enforced in application code instead of via AWS SigV4)
 
@@ -45,14 +53,47 @@ sam deploy --guided
 Grab `FunctionUrl`, `UserPoolId`, and `UserPoolClientId` from the stack
 outputs — the frontend needs all three.
 
+## Invite codes
+
+Registration is closed by default — `SignUp` fails unless the caller passes
+a valid, unused invite code. Generate some:
+
+```bash
+python3 scripts/create_invite_codes.py --count 5 --region ca-central-1
+```
+
+This prints N random 8-character codes and writes each as an unused item in
+`TrainingLogs` (`PK=INVITECODE#<code>`, `SK=STATUS`). Hand codes out to
+whoever you want to let in; each one works for exactly one sign-up
+(`src/invite_trigger.py` consumes it atomically, so two people racing on the
+same code can't both get in). Re-run the script any time you need more.
+
 ## Frontend integration
 
 The frontend needs to authenticate users against the Cognito User Pool
 (`UserPoolId` / `UserPoolClientId` from the outputs above) and get an **ID
 token** back — e.g. via [AWS Amplify Auth](https://docs.amplify.aws/) or
 [`amazon-cognito-identity-js`](https://github.com/aws-amplify/amplify-js/tree/main/packages/amazon-cognito-identity-js).
-Users sign up (email + password), confirm their email, sign in, and the
-library hands back `idToken`. Send that on every API call:
+Users sign up (email + password + **invite code**), confirm their email,
+sign in, and the library hands back `idToken`.
+
+Sign-up must pass the invite code as `ClientMetadata` (not a regular user
+attribute) so `invite_trigger.py` can read it from
+`event.request.clientMetadata`:
+
+```js
+// amazon-cognito-identity-js
+userPool.signUp(
+  email,
+  password,
+  [], // attributeList
+  [], // validationData
+  callback,
+  { invite_code: inviteCode } // clientMetadata
+);
+```
+
+Then send the ID token on every API call:
 
 ```js
 fetch(FUNCTION_URL, {
@@ -71,12 +112,16 @@ than re-prompting login each time.
 
 ### Testing without a frontend
 
-Create a test user and get a token via the AWS CLI:
+Create an invite code, then a test user, then get a token via the AWS CLI:
 
 ```bash
+python3 scripts/create_invite_codes.py --count 1 --region ca-central-1
+# -> copy the printed code into INVITE_CODE below
+
 aws cognito-idp sign-up \
   --client-id "$USER_POOL_CLIENT_ID" \
-  --username you@example.com --password 'SomeStr0ngPassw0rd'
+  --username you@example.com --password 'SomeStr0ngPassw0rd' \
+  --client-metadata invite_code="$INVITE_CODE"
 
 aws cognito-idp admin-confirm-sign-up \
   --user-pool-id "$USER_POOL_ID" --username you@example.com
@@ -120,12 +165,31 @@ it's safe to push this repo publicly.
 
 ## IAM
 
-The Lambda execution role is scoped to exactly two actions
-(`dynamodb:PutItem`, `dynamodb:Query`) on the `TrainingLogs` table ARN only —
-see the inline `Policies` statement in `template.yaml`.
+Each function has its own least-privilege role, scoped to the `TrainingLogs`
+table ARN only:
+
+- `TrainingLogsFunction`: `dynamodb:PutItem`, `dynamodb:Query` (training log
+  items only — it never touches invite codes)
+- `InviteCodeValidatorFunction`: `dynamodb:UpdateItem` only (invite code
+  items only — it never touches training log items)
+
+## Error handling & input validation
+
+`app.py` never returns raw exception text to the caller — unexpected errors
+log full detail to CloudWatch (`logger.exception`) but the HTTP response is
+just a generic `{"error": "Internal error"}`, so internal boto3/DynamoDB
+error strings can't leak to callers. `movement_id`, `weight`,
+`reps_or_time`, and `sets` are all validated (type and, for `movement_id`,
+character set/length) before anything touches DynamoDB, so malformed input
+gets a clean `400` instead of falling through to a generic `500`.
 
 ## Notes / follow-ups for later hardening
 
+- Deploying with **root AWS credentials** works but isn't great practice —
+  switch to a scoped-down IAM user/role for deploys when convenient.
+- No rate limiting on the Function URL (unlike API Gateway, it has no
+  built-in throttling) — fine at personal scale, but there's no backstop
+  against a scripted flood.
 - No pagination on `GET` — fine at MVP scale; add `LastEvaluatedKey`
   handling if a movement's log history grows large.
 - No sign-up/forgot-password UI is included here — that's on the frontend,
