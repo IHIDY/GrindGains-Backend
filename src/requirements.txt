@@ -1,3 +1,5 @@
-# No third-party dependencies. boto3 ships pre-installed in the AWS Lambda
-# python3.11 runtime, so it is intentionally omitted here to keep the
-# deployment package minimal.
+# boto3 ships pre-installed in the AWS Lambda python3.11 runtime, so it is
+# intentionally omitted here. PyJWT[crypto] is needed to verify Cognito ID
+# tokens (RS256) since there's no API Gateway authorizer to do it for us.
+PyJWT[crypto]>=2.8,<3
+

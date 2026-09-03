@@ -14,6 +14,38 @@ Globals:
       - arm64
 
 Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: training-gpt-users
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: training-gpt-frontend
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false # public client (browser JS can't keep a secret)
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+
   TrainingLogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -39,6 +71,8 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref TrainingLogsTable
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
       # Least-privilege: only the two operations the handler actually uses,
       # scoped to this single table (no wildcard resources/actions).
       Policies:
@@ -59,6 +93,7 @@ Resources:
             - POST
           AllowHeaders:
             - content-type
+            - authorization
           MaxAge: 300
 
 Outputs:
@@ -71,3 +106,9 @@ Outputs:
   TableArn:
     Description: DynamoDB table ARN.
     Value: !GetAtt TrainingLogsTable.Arn
+  UserPoolId:
+    Description: Cognito User Pool ID — needed by the frontend for sign-up/sign-in.
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Description: Cognito App Client ID — needed by the frontend for sign-up/sign-in.
+    Value: !Ref UserPoolClient

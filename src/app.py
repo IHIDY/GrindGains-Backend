@@ -2,11 +2,15 @@
 TrainingGPT MVP backend — single Lambda behind a Function URL, routing on
 HTTP method, backed by a single DynamoDB table (single-table design).
 
-PK: USER#<user_id>            (hardcoded to USER#ME for this MVP)
+PK: USER#<user_id>            (user_id = the caller's Cognito `sub`)
 SK: MOVEMENT#<movement_id>#LOG#<timestamp_iso8601>
 
 POST -> log a new set/hold.
 GET  -> list all logs for a given movement_id.
+
+Every request must carry a Cognito ID token (`Authorization: Bearer <jwt>`),
+verified in auth.py — there's no shared secret and no per-user config here,
+each user is scoped to their own token's `sub`.
 
 CORS is handled entirely by the Lambda Function URL's Cors config (see
 template.yaml) — AWS answers OPTIONS preflight requests directly without
@@ -21,8 +25,9 @@ import os
 import boto3
 from boto3.dynamodb.conditions import Key
 
+from auth import get_authenticated_user_id
+
 TABLE_NAME = os.environ["TABLE_NAME"]
-USER_ID = "ME"  # hardcoded single user for the MVP
 
 _dynamodb = boto3.resource("dynamodb")
 _table = _dynamodb.Table(TABLE_NAME)
@@ -33,11 +38,15 @@ VALID_MODES = ("isotonic", "mobeta")
 def lambda_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
 
+    user_id = get_authenticated_user_id(event)
+    if user_id is None:
+        return _response(401, {"error": "Unauthorized"})
+
     try:
         if method == "POST":
-            return _handle_post(event)
+            return _handle_post(event, user_id)
         if method == "GET":
-            return _handle_get(event)
+            return _handle_get(event, user_id)
         return _response(405, {"error": f"Unsupported method: {method}"})
     except ValueError as exc:
         return _response(400, {"error": str(exc)})
@@ -45,7 +54,7 @@ def lambda_handler(event, context):
         return _response(500, {"error": "Internal error", "detail": str(exc)})
 
 
-def _handle_post(event):
+def _handle_post(event, user_id):
     try:
         body = json.loads(event.get("body") or "{}")
     except json.JSONDecodeError as exc:
@@ -77,7 +86,7 @@ def _handle_post(event):
     )
 
     item = {
-        "PK": f"USER#{USER_ID}",
+        "PK": f"USER#{user_id}",
         "SK": f"MOVEMENT#{movement_id}#LOG#{timestamp}",
         "mode": mode,
         "weight": _to_decimal(weight),
@@ -89,7 +98,7 @@ def _handle_post(event):
     return _response(201, item)
 
 
-def _handle_get(event):
+def _handle_get(event, user_id):
     params = event.get("queryStringParameters") or {}
     movement_id = params.get("movement_id")
     if not movement_id:
@@ -97,7 +106,7 @@ def _handle_get(event):
 
     sk_prefix = f"MOVEMENT#{movement_id}#LOG#"
     result = _table.query(
-        KeyConditionExpression=Key("PK").eq(f"USER#{USER_ID}")
+        KeyConditionExpression=Key("PK").eq(f"USER#{user_id}")
         & Key("SK").begins_with(sk_prefix)
     )
     return _response(200, result.get("Items", []))
