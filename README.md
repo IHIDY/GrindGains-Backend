@@ -17,10 +17,12 @@ Lambda verifies the caller's Cognito ID token itself.
     function's env vars without CloudFormation rejecting the template as a
     circular dependency (User Pool → trigger function → User Pool)
 - **Storage:** 1 DynamoDB table (`TrainingLogs`), on-demand billing — also
-  holds invite code items (`PK=INVITECODE#<code>`)
+  holds invite code items (`PK=INVITECODE#<code>`) and claimed-username
+  items (`PK=USERNAME#<lowercased name>`)
 - **Auth:** Amazon Cognito User Pool (free tier: 50,000 MAU), registration
-  gated by invite code — the frontend signs users in and sends their ID
-  token; the Lambda verifies it on every request (see `src/auth.py`)
+  gated by invite code and (if supplied) a unique `preferred_username` —
+  the frontend signs users in and sends their ID token; the Lambda verifies
+  it on every request (see `src/auth.py`)
 - **API:** Lambda Function URL with CORS enabled (`AuthType: NONE` — auth is
   enforced in application code instead of via AWS SigV4)
 
@@ -130,6 +132,26 @@ whoever you want to let in; each one works for exactly one sign-up
 (`src/invite_trigger.py` consumes it atomically, so two people racing on the
 same code can't both get in). Re-run the script any time you need more.
 
+## Username uniqueness
+
+Cognito is configured with `UsernameAttributes: [email]`, so email
+uniqueness is already enforced natively — no work needed there. But Cognito
+can't also natively dedupe a separate `preferred_username` attribute in
+this configuration (`UsernameAttributes` and `AliasAttributes` are mutually
+exclusive, and switching to the latter would mean recreating the pool), so
+`invite_trigger.py` enforces it manually: **if** the sign-up includes a
+`preferred_username`, it atomically claims `PK=USERNAME#<name.lower()>` in
+the same table (case-insensitive — `CoolGymRat` and `coolgymrat` collide on
+purpose). If that name's already claimed, sign-up is rejected with `That
+username is already taken.`. If no `preferred_username` is sent, this check
+is skipped entirely (it's optional, not required).
+
+This runs in the **same DynamoDB transaction** as the invite-code check
+(`TransactWriteItems`), not as two separate writes — otherwise a sign-up
+could claim the username and then fail the invite-code check (or vice
+versa), permanently locking a username to a signup that never completed.
+Either both succeed or neither does.
+
 ## Frontend integration
 
 The frontend needs to authenticate users against the Cognito User Pool
@@ -141,19 +163,29 @@ sign in, and the library hands back `idToken`.
 
 Sign-up must pass the invite code as `ClientMetadata` (not a regular user
 attribute) so `invite_trigger.py` can read it from
-`event.request.clientMetadata`:
+`event.request.clientMetadata`. If you want a unique display name, pass it
+as the real `preferred_username` **user attribute** (not clientMetadata) —
+that's a standard Cognito attribute, no schema changes needed on our end:
 
 ```js
 // amazon-cognito-identity-js
+const attributeList = [
+  new CognitoUserAttribute({ Name: "preferred_username", Value: username }), // optional
+];
 userPool.signUp(
   email,
   password,
-  [], // attributeList
+  attributeList,
   [], // validationData
   callback,
   { invite_code: inviteCode } // clientMetadata
 );
 ```
+
+If the username's taken, `SignUp` fails with `That username is already
+taken.` — same error-surfacing mechanism as an invalid invite code, so
+handle both the same way on the frontend (show the message from the
+caught error).
 
 Then send the ID token on every API call:
 
@@ -232,9 +264,13 @@ Each function has its own least-privilege role, scoped to the `TrainingLogs`
 table ARN only:
 
 - `TrainingLogsFunction`: `dynamodb:PutItem`, `dynamodb:Query` (training log
-  items only — it never touches invite codes)
-- `InviteCodeValidatorFunction`: `dynamodb:UpdateItem` only (invite code
-  items only — it never touches training log items)
+  items only — it never touches invite codes or claimed usernames)
+- `InviteCodeValidatorFunction`: `dynamodb:UpdateItem`, `dynamodb:PutItem`
+  (invite code / username items only — it never touches training log
+  items). Both actions are needed because the two checks run together in
+  one `TransactWriteItems` call; IAM authorizes each item in a transaction
+  by its underlying action, same as if you'd called `UpdateItem`/`PutItem`
+  individually — there's no separate "transaction" permission.
 
 ## Error handling & input validation
 

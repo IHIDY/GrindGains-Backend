@@ -42,13 +42,17 @@ Resources:
         Variables:
           TABLE_NAME: !Ref TrainingLogsTable
       # Separate least-privilege role from the main API function: this one
-      # only ever consumes invite codes, never touches training log items.
+      # only ever consumes invite codes / claims usernames, never touches
+      # training log items. Both actions are needed because the two checks
+      # run together in one TransactWriteItems call (Update + Put) — IAM
+      # authorizes a transaction per the underlying action of each item.
       Policies:
         - Statement:
-            - Sid: InviteCodeConsume
+            - Sid: InviteCodeAndUsernameClaim
               Effect: Allow
               Action:
                 - dynamodb:UpdateItem
+                - dynamodb:PutItem
               Resource: !GetAtt TrainingLogsTable.Arn
 
   InviteCodeValidatorFunctionLogGroup:
