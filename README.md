@@ -38,6 +38,68 @@ Lambda verifies the caller's Cognito ID token itself.
 Each user only ever sees their own `USER#<sub>` partition — there's no way
 for one signed-in user to read or write another's logs.
 
+`PK`/`SK` are internal storage details and never appear in API
+responses — see **API reference** below for the actual response shape.
+
+## API reference
+
+No API Gateway means no path-based routing — every request hits the same
+`FunctionUrl`, differentiated by HTTP method (and, for `GET`, a query
+param). Every request needs `Authorization: Bearer <ID token>`; anything
+without a valid one gets `401`.
+
+### `POST` — log a set/hold
+
+```
+POST {FunctionUrl}
+Headers: content-type: application/json, authorization: Bearer <ID token>
+Body:
+{
+  "movement_id": "pushup",   // required, 1-128 chars: letters/digits/_/-
+  "mode": "isotonic",        // required, "isotonic" | "mobeta"
+  "weight": 0,                // required, number
+  "reps_or_time": 20,         // required, number (reps for isotonic, seconds for mobeta)
+  "sets": 3                   // optional, number, defaults to 1
+}
+```
+
+`201` on success, body is the created entry:
+```json
+{"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3}
+```
+
+### `GET ?movement_id=<id>` — history for one movement
+
+`200`, body is an array of entries (same shape as the `POST` response),
+oldest first:
+```json
+[
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3},
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4}
+]
+```
+Reverse client-side if you want most-recent-first.
+
+### `GET` (no `movement_id`) — list every movement this user has logged
+
+For a dashboard/list page that needs to know "what movements does this user
+have" before it can query any of them individually. `200`, body is an array
+with **one entry per movement_id — the most recent one**:
+```json
+[
+  {"movement_id": "plank", "timestamp": "2026-09-07T18:41:00.399294Z", "mode": "mobeta", "weight": 0, "reps_or_time": 45, "sets": 1},
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4}
+]
+```
+
+### Errors
+
+| Scenario | Status | Body |
+|---|---|---|
+| Missing/expired/invalid token | 401 | `{"error": "Unauthorized"}` |
+| Missing field, bad type, invalid `mode`/`movement_id` | 400 | `{"error": "<what's wrong>"}` |
+| Anything unexpected | 500 | `{"error": "Internal error"}` (no internal detail leaked; full trace goes to CloudWatch) |
+
 ## Deploy
 
 `PyJWT[crypto]` (used to verify Cognito tokens) has a compiled C extension
@@ -133,7 +195,7 @@ aws cognito-idp initiate-auth \
 # -> copy AuthenticationResult.IdToken from the response
 ```
 
-Then:
+Then (see **API reference** above for the full request/response shapes):
 
 ```bash
 curl -X POST "$FUNCTION_URL" \
@@ -147,7 +209,8 @@ curl -X POST "$FUNCTION_URL" \
         "sets": 3
       }'
 
-curl "$FUNCTION_URL?movement_id=pushup" -H "authorization: Bearer $ID_TOKEN"
+curl "$FUNCTION_URL?movement_id=pushup" -H "authorization: Bearer $ID_TOKEN"  # one movement's history
+curl "$FUNCTION_URL" -H "authorization: Bearer $ID_TOKEN"                    # every movement, latest entry each
 ```
 
 ## Auth details
@@ -190,7 +253,10 @@ gets a clean `400` instead of falling through to a generic `500`.
 - No rate limiting on the Function URL (unlike API Gateway, it has no
   built-in throttling) — fine at personal scale, but there's no backstop
   against a scripted flood.
-- No pagination on `GET` — fine at MVP scale; add `LastEvaluatedKey`
-  handling if a movement's log history grows large.
+- No pagination on either `GET` mode — fine at MVP scale; add
+  `LastEvaluatedKey` handling if a movement's log history (or a user's
+  total movement count) grows large. The no-`movement_id` mode in
+  particular queries every log item a user has ever written (to dedupe
+  down to one-per-movement), so it's the one to watch first.
 - No sign-up/forgot-password UI is included here — that's on the frontend,
   using Amplify Auth or the Cognito Hosted UI.

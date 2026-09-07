@@ -5,8 +5,13 @@ HTTP method, backed by a single DynamoDB table (single-table design).
 PK: USER#<user_id>            (user_id = the caller's Cognito `sub`)
 SK: MOVEMENT#<movement_id>#LOG#<timestamp_iso8601>
 
-POST -> log a new set/hold.
-GET  -> list all logs for a given movement_id.
+POST                       -> log a new set/hold.
+GET ?movement_id=<id>      -> list all logs for that movement.
+GET (no movement_id)       -> list every movement this user has logged,
+                              each with its most recent entry.
+
+PK/SK are internal storage details and never leave this module — responses
+use clean `movement_id`/`timestamp` fields instead (see _to_public_item).
 
 Every request must carry a Cognito ID token (`Authorization: Bearer <jwt>`),
 verified in auth.py — there's no shared secret and no per-user config here,
@@ -36,6 +41,9 @@ _table = _dynamodb.Table(TABLE_NAME)
 
 VALID_MODES = ("isotonic", "mobeta")
 MOVEMENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+# Movement ids are already restricted to MOVEMENT_ID_RE (no "#"), so this
+# split is unambiguous even if a movement_id itself contains "LOG".
+SK_RE = re.compile(r"^MOVEMENT#(?P<movement_id>.+)#LOG#(?P<timestamp>.+)$")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -109,22 +117,33 @@ def _handle_post(event, user_id):
     }
 
     _table.put_item(Item=item)
-    return _response(201, item)
+    return _response(201, _to_public_item(item))
 
 
 def _handle_get(event, user_id):
     params = event.get("queryStringParameters") or {}
     movement_id = params.get("movement_id")
-    if not movement_id:
-        raise ValueError("movement_id query parameter is required")
-    movement_id = _validate_movement_id(movement_id)
 
-    sk_prefix = f"MOVEMENT#{movement_id}#LOG#"
-    result = _table.query(
-        KeyConditionExpression=Key("PK").eq(f"USER#{user_id}")
-        & Key("SK").begins_with(sk_prefix)
-    )
-    return _response(200, result.get("Items", []))
+    if movement_id:
+        movement_id = _validate_movement_id(movement_id)
+        sk_prefix = f"MOVEMENT#{movement_id}#LOG#"
+        result = _table.query(
+            KeyConditionExpression=Key("PK").eq(f"USER#{user_id}")
+            & Key("SK").begins_with(sk_prefix)
+        )
+        items = [_to_public_item(item) for item in result.get("Items", [])]
+        return _response(200, items)
+
+    # No movement_id -> list every movement this user has ever logged, each
+    # with its most recent entry. Items come back ordered by SK ascending,
+    # which sorts by movement_id first and timestamp second within a
+    # movement, so the last item seen per movement_id is the latest one.
+    result = _table.query(KeyConditionExpression=Key("PK").eq(f"USER#{user_id}"))
+    latest_by_movement = {}
+    for item in result.get("Items", []):
+        public_item = _to_public_item(item)
+        latest_by_movement[public_item["movement_id"]] = public_item
+    return _response(200, list(latest_by_movement.values()))
 
 
 def _validate_movement_id(movement_id):
@@ -140,6 +159,18 @@ def _validate_number(name, value):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a number, got {type(value).__name__}")
     return value
+
+
+def _to_public_item(item):
+    match = SK_RE.match(item["SK"])
+    return {
+        "movement_id": match.group("movement_id"),
+        "timestamp": match.group("timestamp"),
+        "mode": item["mode"],
+        "weight": item["weight"],
+        "reps_or_time": item["reps_or_time"],
+        "sets": item["sets"],
+    }
 
 
 def _to_decimal(value):
