@@ -82,6 +82,7 @@ def _handle_post(event, user_id):
     weight = body.get("weight")
     reps_or_time = body.get("reps_or_time")
     sets = body.get("sets", 1)  # defaults to 1 (always, incl. mobeta holds)
+    rpe = body.get("rpe")  # optional, perceived exertion on a 1-10 scale
 
     missing = [
         field
@@ -102,6 +103,10 @@ def _handle_post(event, user_id):
     weight = _validate_number("weight", weight)
     reps_or_time = _validate_number("reps_or_time", reps_or_time)
     sets = _validate_number("sets", sets)
+    if rpe is not None:
+        rpe = _validate_number("rpe", rpe)
+        if not (1 <= rpe <= 10):
+            raise ValueError(f"rpe must be between 1 and 10, got {rpe!r}")
 
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -115,6 +120,8 @@ def _handle_post(event, user_id):
         "reps_or_time": _to_decimal(reps_or_time),
         "sets": _to_decimal(sets),
     }
+    if rpe is not None:
+        item["rpe"] = _to_decimal(rpe)
 
     _table.put_item(Item=item)
     return _response(201, _to_public_item(item))
@@ -170,6 +177,7 @@ def _to_public_item(item):
         "weight": item["weight"],
         "reps_or_time": item["reps_or_time"],
         "sets": item["sets"],
+        "rpe": item.get("rpe"),
     }
 
 

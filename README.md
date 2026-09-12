@@ -36,6 +36,7 @@ Lambda verifies the caller's Cognito ID token itself.
 | `weight` | Number |
 | `reps_or_time` | Number (reps for isotonic, seconds for mobeta) |
 | `sets` | Number (defaults to 1) |
+| `rpe` | Number, 1-10 (optional, omitted when not provided) |
 
 Each user only ever sees their own `USER#<sub>` partition — there's no way
 for one signed-in user to read or write another's logs.
@@ -61,14 +62,16 @@ Body:
   "mode": "isotonic",        // required, "isotonic" | "mobeta"
   "weight": 0,                // required, number
   "reps_or_time": 20,         // required, number (reps for isotonic, seconds for mobeta)
-  "sets": 3                   // optional, number, defaults to 1
+  "sets": 3,                  // optional, number, defaults to 1
+  "rpe": 8                    // optional, number, 1-10
 }
 ```
 
 `201` on success, body is the created entry:
 ```json
-{"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3}
+{"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3, "rpe": 8}
 ```
+`rpe` is `null` in the response when it wasn't provided on the request.
 
 ### `GET ?movement_id=<id>` — history for one movement
 
@@ -76,8 +79,8 @@ Body:
 oldest first:
 ```json
 [
-  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3},
-  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4}
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.067781Z", "mode": "isotonic", "weight": 0, "reps_or_time": 20, "sets": 3, "rpe": 8},
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4, "rpe": null}
 ]
 ```
 Reverse client-side if you want most-recent-first.
@@ -89,8 +92,8 @@ have" before it can query any of them individually. `200`, body is an array
 with **one entry per movement_id — the most recent one**:
 ```json
 [
-  {"movement_id": "plank", "timestamp": "2026-09-07T18:41:00.399294Z", "mode": "mobeta", "weight": 0, "reps_or_time": 45, "sets": 1},
-  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4}
+  {"movement_id": "plank", "timestamp": "2026-09-07T18:41:00.399294Z", "mode": "mobeta", "weight": 0, "reps_or_time": 45, "sets": 1, "rpe": null},
+  {"movement_id": "pushup", "timestamp": "2026-09-07T18:41:00.555374Z", "mode": "isotonic", "weight": 0, "reps_or_time": 25, "sets": 4, "rpe": 8}
 ]
 ```
 
@@ -99,7 +102,7 @@ with **one entry per movement_id — the most recent one**:
 | Scenario | Status | Body |
 |---|---|---|
 | Missing/expired/invalid token | 401 | `{"error": "Unauthorized"}` |
-| Missing field, bad type, invalid `mode`/`movement_id` | 400 | `{"error": "<what's wrong>"}` |
+| Missing field, bad type, invalid `mode`/`movement_id`/`rpe` out of range | 400 | `{"error": "<what's wrong>"}` |
 | Anything unexpected | 500 | `{"error": "Internal error"}` (no internal detail leaked; full trace goes to CloudWatch) |
 
 ## Deploy
@@ -278,9 +281,10 @@ table ARN only:
 log full detail to CloudWatch (`logger.exception`) but the HTTP response is
 just a generic `{"error": "Internal error"}`, so internal boto3/DynamoDB
 error strings can't leak to callers. `movement_id`, `weight`,
-`reps_or_time`, and `sets` are all validated (type and, for `movement_id`,
-character set/length) before anything touches DynamoDB, so malformed input
-gets a clean `400` instead of falling through to a generic `500`.
+`reps_or_time`, `sets`, and `rpe` are all validated (type and, for
+`movement_id`, character set/length; for `rpe`, the 1-10 range) before
+anything touches DynamoDB, so malformed input gets a clean `400` instead of
+falling through to a generic `500`.
 
 ## Notes / follow-ups for later hardening
 
