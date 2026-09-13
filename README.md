@@ -73,6 +73,31 @@ Body:
 ```
 `rpe` is `null` in the response when it wasn't provided on the request.
 
+### `PUT` — edit an existing set/hold
+
+Identifies the entry to overwrite by `movement_id` + `timestamp` (the exact
+`timestamp` string a prior `POST`/`GET` returned for it — that's the SK
+under the hood). All fields are re-sent in full; there's no partial patch.
+
+```
+PUT {FunctionUrl}
+Headers: content-type: application/json, authorization: Bearer <ID token>
+Body:
+{
+  "movement_id": "pushup",                        // required, must match the existing entry
+  "timestamp": "2026-09-07T18:41:00.067781Z",     // required, identifies which entry to edit
+  "mode": "isotonic",                             // required
+  "weight": 185,                                  // required, number
+  "reps_or_time": 8,                              // required, number
+  "sets": 1,                                      // optional, number, defaults to 1
+  "rpe": 8.5                                      // optional, number, 1-10
+}
+```
+
+`200` on success, body is the updated entry (same shape as `POST`'s
+response). `404` if no entry exists for that `movement_id` + `timestamp`
+under the caller's own user — it never creates a new entry.
+
 ### `GET ?movement_id=<id>` — history for one movement
 
 `200`, body is an array of entries (same shape as the `POST` response),
@@ -103,6 +128,7 @@ with **one entry per movement_id — the most recent one**:
 |---|---|---|
 | Missing/expired/invalid token | 401 | `{"error": "Unauthorized"}` |
 | Missing field, bad type, invalid `mode`/`movement_id`/`rpe` out of range | 400 | `{"error": "<what's wrong>"}` |
+| `PUT` targeting a `movement_id`/`timestamp` with no matching entry | 404 | `{"error": "<what's wrong>"}` |
 | Anything unexpected | 500 | `{"error": "Internal error"}` (no internal detail leaked; full trace goes to CloudWatch) |
 
 ## Deploy

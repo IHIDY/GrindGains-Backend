@@ -130,6 +130,7 @@ Resources:
           AllowMethods:
             - GET
             - POST
+            - PUT
           AllowHeaders:
             - content-type
             - authorization

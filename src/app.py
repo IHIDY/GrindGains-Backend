@@ -6,6 +6,8 @@ PK: USER#<user_id>            (user_id = the caller's Cognito `sub`)
 SK: MOVEMENT#<movement_id>#LOG#<timestamp_iso8601>
 
 POST                       -> log a new set/hold.
+PUT                        -> edit an existing set/hold (identified by
+                              movement_id + timestamp, i.e. its SK).
 GET ?movement_id=<id>      -> list all logs for that movement.
 GET (no movement_id)       -> list every movement this user has logged,
                               each with its most recent entry.
@@ -31,6 +33,7 @@ import re
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 
 from auth import get_authenticated_user_id
 
@@ -49,6 +52,10 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+class NotFoundError(Exception):
+    """Raised when an edit targets a log entry that doesn't exist."""
+
+
 def lambda_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
 
@@ -59,9 +66,13 @@ def lambda_handler(event, context):
     try:
         if method == "POST":
             return _handle_post(event, user_id)
+        if method == "PUT":
+            return _handle_put(event, user_id)
         if method == "GET":
             return _handle_get(event, user_id)
         return _response(405, {"error": f"Unsupported method: {method}"})
+    except NotFoundError as exc:
+        return _response(404, {"error": str(exc)})
     except ValueError as exc:
         return _response(400, {"error": str(exc)})
     except Exception:  # noqa: BLE001 - MVP: surface a generic 500
@@ -71,33 +82,30 @@ def lambda_handler(event, context):
         return _response(500, {"error": "Internal error"})
 
 
-def _handle_post(event, user_id):
-    try:
-        body = json.loads(event.get("body") or "{}")
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON body: {exc}") from exc
-
+def _parse_set_fields(body, *, require_timestamp):
     movement_id = body.get("movement_id")
+    timestamp = body.get("timestamp")
     mode = body.get("mode")
     weight = body.get("weight")
     reps_or_time = body.get("reps_or_time")
     sets = body.get("sets", 1)  # defaults to 1 (always, incl. mobeta holds)
     rpe = body.get("rpe")  # optional, perceived exertion on a 1-10 scale
 
-    missing = [
-        field
-        for field, value in (
-            ("movement_id", movement_id),
-            ("mode", mode),
-            ("weight", weight),
-            ("reps_or_time", reps_or_time),
-        )
-        if value is None
+    required = [
+        ("movement_id", movement_id),
+        ("mode", mode),
+        ("weight", weight),
+        ("reps_or_time", reps_or_time),
     ]
+    if require_timestamp:
+        required.append(("timestamp", timestamp))
+    missing = [field for field, value in required if value is None]
     if missing:
         raise ValueError(f"Missing required field(s): {', '.join(missing)}")
 
     movement_id = _validate_movement_id(movement_id)
+    if require_timestamp:
+        timestamp = _validate_timestamp(timestamp)
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {VALID_MODES}, got {mode!r}")
     weight = _validate_number("weight", weight)
@@ -107,6 +115,19 @@ def _handle_post(event, user_id):
         rpe = _validate_number("rpe", rpe)
         if not (1 <= rpe <= 10):
             raise ValueError(f"rpe must be between 1 and 10, got {rpe!r}")
+
+    return movement_id, timestamp, mode, weight, reps_or_time, sets, rpe
+
+
+def _handle_post(event, user_id):
+    try:
+        body = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON body: {exc}") from exc
+
+    movement_id, _, mode, weight, reps_or_time, sets, rpe = _parse_set_fields(
+        body, require_timestamp=False
+    )
 
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -125,6 +146,40 @@ def _handle_post(event, user_id):
 
     _table.put_item(Item=item)
     return _response(201, _to_public_item(item))
+
+
+def _handle_put(event, user_id):
+    try:
+        body = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON body: {exc}") from exc
+
+    movement_id, timestamp, mode, weight, reps_or_time, sets, rpe = _parse_set_fields(
+        body, require_timestamp=True
+    )
+
+    item = {
+        "PK": f"USER#{user_id}",
+        "SK": f"MOVEMENT#{movement_id}#LOG#{timestamp}",
+        "mode": mode,
+        "weight": _to_decimal(weight),
+        "reps_or_time": _to_decimal(reps_or_time),
+        "sets": _to_decimal(sets),
+    }
+    if rpe is not None:
+        item["rpe"] = _to_decimal(rpe)
+
+    try:
+        _table.put_item(Item=item, ConditionExpression="attribute_exists(PK)")
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            raise NotFoundError(
+                f"No log entry found for movement_id={movement_id!r} "
+                f"at timestamp={timestamp!r}"
+            ) from exc
+        raise
+
+    return _response(200, _to_public_item(item))
 
 
 def _handle_get(event, user_id):
@@ -160,6 +215,14 @@ def _validate_movement_id(movement_id):
             "underscore, or hyphen"
         )
     return movement_id
+
+
+def _validate_timestamp(timestamp):
+    # Only used to build the SK (MOVEMENT#<id>#LOG#<timestamp>) — "#" would
+    # make that split ambiguous, same reasoning as MOVEMENT_ID_RE.
+    if not isinstance(timestamp, str) or not timestamp or "#" in timestamp:
+        raise ValueError("timestamp must be a non-empty string without '#'")
+    return timestamp
 
 
 def _validate_number(name, value):

@@ -5,6 +5,7 @@ import sys
 import unittest.mock as mock
 
 import pytest
+from botocore.exceptions import ClientError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -68,6 +69,55 @@ def test_post_missing_required_field_raises(fake_table):
     del body["weight"]
     with pytest.raises(ValueError, match="weight"):
         _post(fake_table, body)
+
+
+def _put(table, body, user_id="u1"):
+    return app._handle_put({"body": json.dumps(body)}, user_id)
+
+
+PUT_BODY = {
+    "movement_id": "pushup",
+    "timestamp": "2026-09-06T18:00:00.000000Z",
+    "mode": "isotonic",
+    "weight": 185,
+    "reps_or_time": 8,
+    "sets": 1,
+    "rpe": 8.5,
+}
+
+
+def test_put_existing_entry_overwrites_and_returns_it(fake_table):
+    resp = _put(fake_table, PUT_BODY)
+    assert resp["statusCode"] == 200
+    kwargs = fake_table.put_item.call_args[1]
+    assert kwargs["ConditionExpression"] == "attribute_exists(PK)"
+    assert kwargs["Item"]["SK"] == "MOVEMENT#pushup#LOG#2026-09-06T18:00:00.000000Z"
+    assert kwargs["Item"]["rpe"] == decimal.Decimal("8.5")
+    body = json.loads(resp["body"])
+    assert body["timestamp"] == "2026-09-06T18:00:00.000000Z"
+    assert body["weight"] == 185
+    assert body["rpe"] == 8.5
+
+
+def test_put_missing_entry_raises_not_found(fake_table):
+    fake_table.put_item.side_effect = ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}},
+        "PutItem",
+    )
+    with pytest.raises(app.NotFoundError):
+        _put(fake_table, PUT_BODY)
+
+
+def test_put_without_timestamp_raises(fake_table):
+    body = dict(PUT_BODY)
+    del body["timestamp"]
+    with pytest.raises(ValueError, match="timestamp"):
+        _put(fake_table, body)
+
+
+def test_put_timestamp_with_hash_raises(fake_table):
+    with pytest.raises(ValueError, match="timestamp"):
+        _put(fake_table, {**PUT_BODY, "timestamp": "bad#value"})
 
 
 def test_get_handles_legacy_item_without_rpe(fake_table):
