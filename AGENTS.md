@@ -4,6 +4,10 @@ Read `_docs/plan.md` first — product/technical spec shared with the frontend r
 Read `README.md` for the full API contract, deploy steps, and data model — it's the
 canonical copy; don't recreate it elsewhere.
 
+Before creating or implementing any issue, read `_docs/process.md` (the issue →
+branch → PR → merge → revert workflow) and `_docs/task-template.md` (the issue
+format).
+
 ## Commands
 
 - `sam build --use-container` / `sam deploy --guided` — build and deploy (container
