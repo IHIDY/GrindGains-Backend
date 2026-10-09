@@ -8,6 +8,8 @@ Before creating or implementing any issue, read `_docs/process.md` (the issue �
 branch → PR → merge → revert workflow) and `_docs/task-template.md` (the issue
 format).
 
+Before writing or changing tests, read `_docs/testing-guidelines.md`.
+
 ## Commands
 
 - `sam build --use-container` / `sam deploy --guided` — build and deploy (container
