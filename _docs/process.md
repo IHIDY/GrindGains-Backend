@@ -29,6 +29,21 @@ this repo and `GrindGains-Frontend` (not duplicated there — see that repo's
 - Merge with squash, so `main` gets exactly one commit per issue.
 - Delete the branch after merge.
 
+## Acceptance criteria and tests
+
+- Every acceptance criterion must be provable by a test. The issue names the test
+  that will prove it (see `_docs/task-template.md`).
+- The tests are written in the same PR as the code, not afterwards.
+- The PR body lists each criterion with the test that proves it, plus the test
+  command and its result (for example "`npm test`: 19 passed").
+- Do not merge while the test suite fails.
+- If a criterion cannot reasonably be automated (visual layout, documentation), the
+  issue must give explicit manual steps for it, and the PR records that they were
+  followed. Treat this as the exception, not the default.
+- Current limit: the frontend deploy workflow does not run tests yet. Until it does,
+  run the suite locally and paste the result into the PR; CI will not catch a
+  failure for you.
+
 ## Reverting
 
 - To undo a shipped feature: `git revert <its squash commit on main>` — safe because
