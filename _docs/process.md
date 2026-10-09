@@ -40,9 +40,10 @@ this repo and `GrindGains-Frontend` (not duplicated there — see that repo's
 - If a criterion cannot reasonably be automated (visual layout, documentation), the
   issue must give explicit manual steps for it, and the PR records that they were
   followed. Treat this as the exception, not the default.
-- Current limit: the frontend deploy workflow does not run tests yet. Until it does,
-  run the suite locally and paste the result into the PR; CI will not catch a
-  failure for you.
+- CI runs the tests on every pull request in both repos: backend `pytest` plus
+  `sam validate`; frontend type-check plus `npm test`. A red check means do not
+  merge. Still paste the local test command and result into the PR so the
+  criterion-to-test mapping is recorded.
 
 ## Reverting
 
