@@ -4,3 +4,4 @@ __pycache__/
 .env
 samconfig.toml
 .DS_Store
+.venv/

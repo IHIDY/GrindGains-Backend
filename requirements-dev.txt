@@ -2,5 +2,6 @@
 # production (see src/requirements.txt) but are needed to run the tests locally
 # and in CI.
 -r src/requirements.txt
+-r mcp-server/requirements.txt
 boto3
 pytest

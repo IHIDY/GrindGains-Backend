@@ -22,7 +22,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ mcp-server/tests/ -v
 
   validate-template:
     runs-on: ubuntu-latest
