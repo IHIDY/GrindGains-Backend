@@ -73,6 +73,16 @@ routines — it's a diary, not a program.
   `movement_id` + `timestamp`. Fully wired end to end (frontend UI → hook → client →
   backend `PUT` handler).
 
+### AI access through MCP (read-only, local)
+- `mcp-server/` is a local MCP server (stdio) that lets Claude Desktop read the signed-in
+  user's own training log. It calls the same Lambda Function URL as the web app with the
+  user's Cognito ID token, obtained from a saved refresh token (one-time login command).
+- Two read-only tools: `list_movements` and `get_movement_history(movement_id)`. Outputs
+  carry a local date (default `America/Halifax`) and explicit units so they can be lined
+  up with other data later. Tools return recorded facts only, never advice.
+- One server per data domain: nutrition and injection logs are future, separate servers;
+  Claude combines them in a conversation. Not part of the Lambda package.
+
 ## 5. Data model (DynamoDB single-table, `TrainingLogs`)
 
 | Item type | PK | SK | Notable attrs |
