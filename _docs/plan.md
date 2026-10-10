@@ -62,11 +62,11 @@ routines — it's a diary, not a program.
 - "Log Set" / "Log a Hold" button → `/workouts/:id/log`.
 
 ### New entry (`/workouts/:id/log`)
-- Isotonic: one or more set rows (reps, weight, optional RPE 1-10), submitted as
+- Isotonic: one or more set rows (weight, reps, optional RPE 1-10), submitted as
   separate `POST`s (one per row/set logged individually — not batched under one `sets`
   count).
-- Mobeta: a hold timer (start/stop → seconds) + optional added weight, single `POST`
-  per hold.
+- Mobeta: optional added weight, then the hold time typed in seconds (no stopwatch),
+  single `POST` per hold.
 
 ### Editing a logged entry
 - Inline edit in `TrainingLogTable` (reps/weight/RPE) → `PUT` full-replace, keyed by
