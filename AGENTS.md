@@ -14,7 +14,8 @@ Before writing or changing tests, read `_docs/testing-guidelines.md`.
 
 - `sam build --use-container` / `sam deploy --guided` — build and deploy (container
   build is required for `PyJWT[crypto]`'s compiled extension)
-- `pip install -r requirements-dev.txt` — install test dependencies (once, ideally in a venv)
+- `pip install -r requirements-dev.txt` — install test dependencies (once, in a venv; Python 3.10+
+  because of the MCP SDK, so the macOS system `python3` 3.9 will not work)
 - `python3 -m pytest tests/ mcp-server/tests/` — run tests (backend and MCP server)
 - `python3 scripts/create_invite_codes.py --count N --region ca-central-1` — mint
   invite codes

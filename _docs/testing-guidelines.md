@@ -62,6 +62,19 @@ process rules (criterion -> test, same PR, no merge while red) see `_docs/proces
 - Check layout order by DOM position (`compareDocumentPosition`), and check that
   typed values reach the right API fields (for example weight and reps not swapped).
 
+## MCP server (pytest) — `mcp-server/tests/`
+
+- Python 3.10+ (the MCP SDK requires it). Run from the repo root:
+  `python3 -m pytest tests/ mcp-server/tests/`.
+- HTTP is faked with `httpx.MockTransport` (`make_http` in `conftest.py`); the clock is
+  injected (`Clock`) so token expiry needs no sleeping. Credentials go to `tmp_path`.
+- Tools are tested through a fake API object and `asyncio.run(server.call_tool(...))`.
+  Expected failures raise `ToolError`; unexpected ones raise `UnexpectedToolError` with
+  no details, which the tests check so tokens cannot leak.
+- `test_stdio_server.py` starts the real server as a subprocess. Keep the raw-pipe test
+  with `PYTHONUNBUFFERED=1`: the SDK client ignores stray stdout lines and `print()` to a
+  pipe is buffered, so without both precautions a stdout leak passes unnoticed.
+
 ## Not covered yet
 
 - Integration tests (real DynamoDB behaviour, frontend against backend). Conventions
