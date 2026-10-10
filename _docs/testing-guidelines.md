@@ -40,7 +40,7 @@ process rules (criterion -> test, same PR, no merge while red) see `_docs/proces
 - Keep a test for legacy items missing newer fields
   (`test_get_handles_legacy_item_without_rpe`).
 
-## Frontend (Vitest) — `src/**/*.test.ts`
+## Frontend (Vitest) — `src/**/*.test.ts` and `*.test.tsx`
 
 - Setup: Node 22, `npm ci`, then `npm test` (runs once and exits). Test files sit next
   to the code they cover (`src/lib/format.test.ts`, `src/api/client.test.ts`).
@@ -53,6 +53,14 @@ process rules (criterion -> test, same PR, no merge while red) see `_docs/proces
   normalized result, and test error responses (JSON error body and non-JSON body).
 - Avoid assertions that depend on locale or timezone (for example `formatShortDate`);
   test the pure helpers instead.
+- Component tests (`NewEntryIsotonic.test.tsx`, `NewEntryMobeta.test.tsx`,
+  `TrainingLogTable.test.tsx`) start with `// @vitest-environment jsdom` in each file
+  and use `@testing-library/react` with `fireEvent`; call `cleanup` in `afterEach`.
+- Mock the data layer, not the network: `vi.mock("../api/hooks", ...)` returns fake
+  `useLogEntry` / `useUpdateEntry`, and `PageShell` is mocked because its NavBar needs
+  the auth provider. Wrap pages that use the router in `MemoryRouter`.
+- Check layout order by DOM position (`compareDocumentPosition`), and check that
+  typed values reach the right API fields (for example weight and reps not swapped).
 
 ## Not covered yet
 
@@ -61,4 +69,5 @@ process rules (criterion -> test, same PR, no merge while red) see `_docs/proces
 - Backend: `src/auth.py` (JWT verification), `src/invite_trigger.py` (invite code and
   username transaction), and `lambda_handler` routing with its 401 and 500 responses
   have no tests.
-- Frontend: no tests for hooks, auth, pages or components.
+- Frontend: no tests for hooks, auth, or the other pages and components (only the
+  set/hold entry forms and the training log table are covered).
