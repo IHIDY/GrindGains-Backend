@@ -1,9 +1,12 @@
-# TrainingGPT — MVP Backend
+# GrindGains Backend
 
-Invite-only, multi-user backend for a personal training tracker (sets/reps +
-isometric time-under-tension), built on a Lambda behind a Function URL. No
-API Gateway — that means no built-in Cognito authorizer either, so the
-Lambda verifies the caller's Cognito ID token itself.
+![CI](https://github.com/IHIDY/GrindGains-Backend/actions/workflows/ci.yml/badge.svg)
+
+A training log designed to run at $0 a month.
+
+One Lambda behind a Function URL, one DynamoDB table, Cognito for sign-in. No API Gateway, no servers to keep warm. It tracks normal sets (weight × reps) and isometric holds (added weight × seconds), and a small MCP server lets Claude read your log.
+
+[Live app](https://grindgains.junfa-li.me) · [Frontend repo](https://github.com/IHIDY/GrindGains-Frontend) · [Ask Claude about your training](mcp-server/)
 
 ## Stack
 
