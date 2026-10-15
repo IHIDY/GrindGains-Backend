@@ -22,6 +22,14 @@
 
 **Least privilege per function.** The API function is allowed only `PutItem` and `Query` on the one table. The sign-up function is allowed only `UpdateItem` and `PutItem`, and its code only touches invite and username items.
 
+## How it was built
+
+![Workflow diagram: discuss, write an issue, code on a branch, open a pull request, CI, squash merge, with a context box, a red-CI loop, an undo path and a docs-only exception](docs/ai-workflow.svg)
+
+This project is built with Claude Code, and every change follows the same loop. The idea is talked through first, then written up as an issue with a goal and acceptance criteria that a test can prove. The work happens on its own branch with the tests in the same pull request, and the pull request ticks off each criterion with its evidence. CI has to be green before a squash merge, so each issue is one commit that can be reverted on its own.
+
+Every session starts by reading the same context files, so a fresh agent knows the spec, the process and how to test. Criteria that need a real account, such as signing in through Claude Desktop, stay unticked and keep the issue open until they are done. README and other prose edits skip the loop and go straight to `main`. The full rules are in [`_docs/process.md`](_docs/process.md).
+
 ## Documentation
 
 - [API and data model](docs/api.md): every endpoint, field and error
