@@ -4,6 +4,12 @@ How we go from a feature discussion to a merged, revertible change. Applies to b
 this repo and `GrindGains-Frontend` (not duplicated there — see that repo's
 `_docs/process.md` for the pointer, same reasoning as `plan.md`).
 
+## When this process does not apply
+
+Edits that only change prose documentation, such as `README.md` files, do not need an
+issue, a branch or a PR. Make them directly on `main`. Anything that touches code,
+tests, CI or configuration still follows the rules below.
+
 ## Issues
 
 - One issue = one independently-implementable, independently-verifiable unit of work
