@@ -2,17 +2,15 @@
 
 ![CI](https://github.com/IHIDY/GrindGains-Backend/actions/workflows/ci.yml/badge.svg)
 
-A training log designed to run at $0 a month.
+"What Gets Measured gets managed" - V.F. Ridgway, 1956.
 
-One Lambda behind a Function URL, one DynamoDB table, Cognito for sign-in. No API Gateway, no servers to keep warm. It tracks normal sets (weight × reps) and isometric holds (added weight × seconds), and a small MCP server lets Claude read your log.
+
 
 [Live app](https://grindgains.junfa-li.me) · [Frontend repo](https://github.com/IHIDY/GrindGains-Frontend) · [Ask Claude about your training](mcp-server/)
 
 ## How it works
 
 ![Architecture diagram: the web app and the MCP server call one Lambda with a Cognito ID token, the Lambda reads and writes one DynamoDB table, and sign-up goes through Cognito and a second Lambda that checks the invite code](docs/architecture.svg)
-
-The web app and the MCP server call the same Lambda with a Cognito ID token. The Lambda checks the token itself, then reads or writes one DynamoDB table. Sign-up goes through a second small Lambda that checks the invite code. The diagram was drawn in Excalidraw; the editable source is [docs/architecture.excalidraw](docs/architecture.excalidraw).
 
 ## Why it looks like this
 
