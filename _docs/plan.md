@@ -93,9 +93,10 @@ routines — it's a diary, not a program.
 
 ## 6. API contract (Lambda Function URL, no API Gateway)
 
-Full request/response shapes, error table, and deploy/auth details are documented in
-this repo's `README.md` — that stays the single canonical copy (the frontend used to
-carry a duplicate that drifted out of date; it was deleted, see §8). Summary:
+Full request/response shapes, the error table and the data model are in `docs/api.md`
+(auth details in `docs/auth.md`, deploy steps in `docs/deploy.md`). `docs/api.md` stays
+the single canonical copy (the frontend used to carry a duplicate that drifted out of
+date; it was deleted, see §8). Summary:
 
 All requests need `Authorization: Bearer <Cognito ID token>` → `401` if missing/invalid.
 
@@ -115,7 +116,7 @@ All requests need `Authorization: Bearer <Cognito ID token>` → `401` if missin
 - **Mobeta detail page**: `WorkoutDetailMobeta.tsx` hasn't been reviewed against this
   spec as closely as the isotonic page — confirm it matches (charts, editing) before
   treating this doc as ground truth for it specifically.
-- Carried over from `README.md`'s "Notes / follow-ups for later hardening": no rate
+- Carried over from the "Known gaps" in `README.md` and `docs/deploy.md`: no rate
   limiting, no pagination on either `GET` mode, no password-reset UI, no
   routine/session grouping, no sharing/coach/admin UI, no built-in audio/video
   recording. None of these are MVP requirements — call them out explicitly if that
@@ -130,5 +131,6 @@ fixed as part of writing it down:
    and `rpe` were "not yet supported by the backend." False — both were already
    implemented and wired end-to-end in the UI. Comments corrected.
 2. `GrindGains-Frontend/README backend.md` was a stale, out-of-date mirror of this
-   repo's `README.md` (missing `PUT`, `rpe`, username uniqueness). Deleted; this repo's
-   `README.md` is the single source of truth for the API going forward.
+   repo's README (missing `PUT`, `rpe`, username uniqueness). Deleted; this repo's API
+   reference (now `docs/api.md`, it used to live in `README.md`) is the single source of
+   truth for the API going forward.

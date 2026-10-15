@@ -1,8 +1,13 @@
 # GrindGains Backend
 
 Read `_docs/plan.md` first — product/technical spec shared with the frontend repo.
-Read `README.md` for the full API contract, deploy steps, and data model — it's the
-canonical copy; don't recreate it elsewhere.
+Read `docs/api.md` for the full API contract and data model — it's the canonical copy;
+don't recreate it elsewhere. Deploy steps are in `docs/deploy.md` and authentication
+details in `docs/auth.md`. `README.md` is the public front page for people, so reading
+it is optional.
+
+`_docs/` holds internal docs for agents and process (plan, process, testing guide);
+`docs/` holds what outsiders read (API, deploy, auth, the architecture diagram).
 
 Before creating or implementing any issue, read `_docs/process.md` (the issue →
 branch → PR → merge → revert workflow) and `_docs/task-template.md` (the issue
