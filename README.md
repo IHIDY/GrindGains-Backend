@@ -10,7 +10,7 @@
 
 ## Ambition
 
-![The big picture: many small gains apps, each with a read-only MCP server, feeding one Claude that can answer questions across all of them](docs/ambition.svg)
+![The big picture: many small gains apps, each with a read-only MCP server, feeding one Claude that runs the agent loop and answers whatever you ask](docs/blueprint.svg)
 
 GrindGains is the first piece of a bigger plan: a personal progress system made of many small apps, one for each part of life that can be tracked and improved. Training is built. Nutrition, peptides, sleep, body measurements, the calendar and studying are planned, and the list will grow.
 
