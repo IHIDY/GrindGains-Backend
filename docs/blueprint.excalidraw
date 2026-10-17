@@ -1551,37 +1551,6 @@
       "baseFontSize": null
     },
     {
-      "id": "fpcs6JRxAbrrHifhRg6vx",
-      "type": "diamond",
-      "x": 898.91015625,
-      "y": 438.41796875,
-      "width": 0.54296875,
-      "height": 0.1796875,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 1,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "index": "ac",
-      "roundness": {
-        "type": 2
-      },
-      "seed": 1508433265,
-      "version": 3,
-      "versionNonce": 513118783,
-      "isDeleted": false,
-      "boundElements": null,
-      "updated": 1792109721242,
-      "created": 1792109721222,
-      "link": null,
-      "locked": false
-    },
-    {
       "id": "zT_i7aBXp4guNq21GbzEN",
       "type": "line",
       "x": 551.04296875,
@@ -1698,51 +1667,6 @@
       "boundElements": null,
       "updated": 1792109782275,
       "created": 1792109778804,
-      "link": null,
-      "locked": false,
-      "points": [
-        [
-          0,
-          0
-        ],
-        [
-          0.0001,
-          0.0001
-        ]
-      ],
-      "pressures": [],
-      "simulatePressure": true,
-      "strokeOptions": {
-        "variability": "constant",
-        "streamline": 0.5
-      }
-    },
-    {
-      "id": "DDRjTRHATnJIK1eq3Ufps",
-      "type": "freedraw",
-      "x": 594.16015625,
-      "y": 360.4375,
-      "width": 0.0001,
-      "height": 0.0001,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "dashed",
-      "roughness": 1,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "index": "ag",
-      "roundness": null,
-      "seed": 2062843135,
-      "version": 3,
-      "versionNonce": 674439249,
-      "isDeleted": false,
-      "boundElements": null,
-      "updated": 1792109795668,
-      "created": 1792109795572,
       "link": null,
       "locked": false,
       "points": [
