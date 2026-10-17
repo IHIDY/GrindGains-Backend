@@ -8,13 +8,13 @@
 
 [Live app](https://grindgains.junfa-li.me) · [Frontend repo](https://github.com/IHIDY/GrindGains-Frontend) · [Ask Claude about your training](mcp-server/)
 
-## Ambition
+## Blueprint
 
 ![The big picture: many small gains apps, each with a read-only MCP server, feeding one Claude that runs the agent loop and answers whatever you ask](docs/blueprint.svg)
 
-GrindGains is the first piece of a bigger plan: a personal progress system made of many small apps, one for each part of life that can be tracked and improved. Training is built. Nutrition, peptides, sleep, body measurements, the calendar and studying are planned, and the list will grow.
+GrindGains is the first piece of a bigger plan: a personal progress system made of many small apps, one for each part of life that can be tracked and improved. Training, Nutrition, PEDs, sleep, body measurements ... Everything on the horizon.
 
-Every app follows the same recipe: a small serverless backend, a web UI, and a read-only MCP server with the same conventions (local dates, explicit units, one account). The payoff is the top of the diagram: Claude can read all the logs in one conversation and answer questions like "how is my month going?" from facts instead of guesses.
+Every app follows the same recipe: a small serverless backend, a web UI, and a MCP server that allows AI agent to read all the logs in one conversation and answer questions based on your personal metric.
 
 ## How it works
 
@@ -36,10 +36,3 @@ Every session starts by reading the same context files, so a fresh agent knows t
 - [MCP server](mcp-server/README.md): let Claude read your training log
 
 Working on this repo with an AI agent? Start with [AGENTS.md](AGENTS.md).
-
-## Known gaps
-
-- No rate limiting on the Function URL. Fine at personal scale, but a script could flood it.
-- No pagination. Listing every movement reads all of a user's logs, so it is the first call to watch as history grows.
-- No password reset in the web app yet.
-- The tests do not cover `src/auth.py` or the sign-up trigger yet.
